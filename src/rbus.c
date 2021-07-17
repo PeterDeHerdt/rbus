@@ -1382,13 +1382,13 @@ static void _get_callback_handler (rbusHandle_t handle, rbusMessage request, rbu
                             rbusValue_appendToMessage(rbusProperty_GetName(first), rbusProperty_GetValue(first), *response);
                             first = rbusProperty_GetNext(first);
                         }
-                        /* Release the memory */
-                        rbusProperty_Release(xproperties);
                     }
                     else
                     {
                         rbusMessage_SetInt32(*response, (int) RBUS_ERROR_ELEMENT_DOES_NOT_EXIST);
                     }
+                    /* Release the memory */
+                    rbusProperty_Release(xproperties);
                 }
                 else
                 {
