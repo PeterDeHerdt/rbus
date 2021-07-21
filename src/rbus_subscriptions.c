@@ -202,13 +202,10 @@ static void rbusSubscriptions_onSubscriptionCreated(rbusSubscription_t* sub, ele
 
         while(child)
         {
-            if(child->type != 0)
+            if(TokenChain_match(sub->tokens, child))
             {
-                if(TokenChain_match(sub->tokens, child))
-                {
-                    rtList_PushBack(sub->instances, child, NULL);
-                    addElementSubscription(child, sub, false);
-                }
+                rtList_PushBack(sub->instances, child, NULL);
+                addElementSubscription(child, sub, false);
             }
 
             /*recurse into children except for row templates {i}*/

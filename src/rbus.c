@@ -747,8 +747,13 @@ int subscribeHandlerImpl(rbusHandle_t handle, bool added, elementNode* el, char 
     comp_info* ci = (comp_info*)handle;
     bool autoPublish = true;
 
+    rbusCallbackTable_t* cbTable = &el->cbTable;
+    if (cbTable->eventSubHandler == NULL && el->parent->type == RBUS_ELEMENT_TYPE_TABLE) {
+        cbTable = &el->parent->cbTable;
+    }
+
     /* call the provider subHandler first to see if it overrides autoPublish */
-    if(el->cbTable.eventSubHandler)
+    if(cbTable->eventSubHandler)
     {
         rbusError_t err;
         rbusEventSubAction_t action;
@@ -757,7 +762,7 @@ int subscribeHandlerImpl(rbusHandle_t handle, bool added, elementNode* el, char 
         else
             action = RBUS_EVENT_ACTION_UNSUBSCRIBE;
 
-        err = el->cbTable.eventSubHandler(handle, action, eventName, filter, interval, &autoPublish);
+        err = cbTable->eventSubHandler(handle, action, eventName, filter, interval, &autoPublish);
 
         if(err != RBUS_ERROR_SUCCESS)
         {
@@ -942,7 +947,7 @@ static int _event_subscribe_callback_handler(char const* object,  char const* ev
 
     RBUSLOG_DEBUG("%s: event subscribe callback for [%s] event!", __FUNCTION__, eventName);
 
-    elementNode* el = retrieveElement(ci->elementRoot, eventName);
+    elementNode* el = retrieveInstanceElement(ci->elementRoot, eventName);
 
     if(el)
     {
@@ -1895,12 +1900,11 @@ rbusError_t rbusTable_registerRow(
     char const* aliasName,
     uint32_t instNum)
 {
-    rbusError_t rc = RBUS_ERROR_SUCCESS;
     comp_info* ci = (comp_info*)handle;
     
-    elementNode* tableInstance = retrieveElement(ci->elementRoot, rowName);
+    elementNode* tableInstance = retrieveInstanceElement(ci->elementRoot, rowName);
     elementNode* tableRegElem = retrieveElement(ci->elementRoot, tableName);
-    elementNode* tableInstElem = retrieveInstanceElement(ci->elementRoot, tableName);
+    elementNode* tableInstElem = retrieveInstanceElement(ci->elementRoot, tableName);   
 
     if (tableInstance) {
         return RBUS_ERROR_SUCCESS;
@@ -1908,7 +1912,7 @@ rbusError_t rbusTable_registerRow(
 
     if(tableRegElem && tableInstElem)
     {
-        tableInstElem = tableInstElem->parent;
+        RBUSLOG_DEBUG("%s: register table row %s", __FUNCTION__, rowName);
         registerTableRow(handle, tableInstElem, tableName, aliasName, instNum);
         return RBUS_ERROR_SUCCESS;
     }
@@ -1920,7 +1924,6 @@ rbusError_t rbusTable_unregisterRow(
     rbusHandle_t handle,
     char const* rowName)
 {
-    rbusError_t rc = RBUS_ERROR_SUCCESS;
     comp_info* ci = (comp_info*)handle;
 
     /*get the element for the row */
