@@ -748,7 +748,7 @@ int subscribeHandlerImpl(rbusHandle_t handle, bool added, elementNode* el, char 
     bool autoPublish = true;
 
     rbusCallbackTable_t* cbTable = &el->cbTable;
-    if (cbTable->eventSubHandler == NULL && el->parent->type == RBUS_ELEMENT_TYPE_TABLE) {
+    if (cbTable->eventSubHandler == NULL && el->parent && el->parent->type == RBUS_ELEMENT_TYPE_TABLE) {
         cbTable = &el->parent->cbTable;
     }
 
