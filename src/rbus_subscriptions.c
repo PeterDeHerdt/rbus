@@ -210,7 +210,7 @@ static void rbusSubscriptions_onSubscriptionCreated(rbusSubscription_t* sub, ele
                     addElementSubscription(child, sub, false);
                 }
             }
-            
+
             /*recurse into children except for row templates {i}*/
             if( child->child && !(child->parent->type == RBUS_ELEMENT_TYPE_TABLE && strcmp(child->name, "{i}") == 0) )
             {

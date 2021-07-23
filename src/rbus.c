@@ -942,7 +942,7 @@ static int _event_subscribe_callback_handler(char const* object,  char const* ev
 
     RBUSLOG_DEBUG("%s: event subscribe callback for [%s] event!", __FUNCTION__, eventName);
 
-    elementNode* el = retrieveInstanceElement(ci->elementRoot, eventName);
+    elementNode* el = retrieveElement(ci->elementRoot, eventName);
 
     if(el)
     {
@@ -1899,7 +1899,7 @@ rbusError_t rbusTable_registerRow(
     elementNode* tableInstance = retrieveInstanceElement(ci->elementRoot, rowName);
     elementNode* tableRegElem = retrieveElement(ci->elementRoot, tableName);
     elementNode* tableInstElem = retrieveInstanceElement(ci->elementRoot, tableName);
-    
+
     if (tableInstance) {
         return RBUS_ERROR_SUCCESS;
     }
