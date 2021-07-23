@@ -716,17 +716,6 @@ rbusError_t rbus_discoverComponentDataElements(
   * @{ 
   */
 
- rbusError_t rbusTable_registerRow(
-    rbusHandle_t handle,
-    char const* tableName,
-    char const* rowName,
-    char const* aliasName,
-    uint32_t instNum);
-
-rbusError_t rbusTable_unregisterRow(
-    rbusHandle_t handle,
-    char const* rowName);
-
 /** @fn rbusError_t rbus_regDataElements(
  *          rbusHandle_t handle,
  *          int numDataElements, 
