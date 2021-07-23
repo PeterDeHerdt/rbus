@@ -747,13 +747,8 @@ int subscribeHandlerImpl(rbusHandle_t handle, bool added, elementNode* el, char 
     comp_info* ci = (comp_info*)handle;
     bool autoPublish = true;
 
-    rbusCallbackTable_t* cbTable = &el->cbTable;
-    if (cbTable->eventSubHandler == NULL && el->parent && el->parent->type == RBUS_ELEMENT_TYPE_TABLE) {
-        cbTable = &el->parent->cbTable;
-    }
-
     /* call the provider subHandler first to see if it overrides autoPublish */
-    if(cbTable->eventSubHandler)
+    if(el->cbTable.eventSubHandler)
     {
         rbusError_t err;
         rbusEventSubAction_t action;
@@ -762,7 +757,7 @@ int subscribeHandlerImpl(rbusHandle_t handle, bool added, elementNode* el, char 
         else
             action = RBUS_EVENT_ACTION_UNSUBSCRIBE;
 
-        err = cbTable->eventSubHandler(handle, action, eventName, filter, interval, &autoPublish);
+        err = el->cbTable.eventSubHandler(handle, action, eventName, filter, interval, &autoPublish);
 
         if(err != RBUS_ERROR_SUCCESS)
         {
@@ -1903,8 +1898,8 @@ rbusError_t rbusTable_registerRow(
     
     elementNode* tableInstance = retrieveInstanceElement(ci->elementRoot, rowName);
     elementNode* tableRegElem = retrieveElement(ci->elementRoot, tableName);
-    elementNode* tableInstElem = retrieveInstanceElement(ci->elementRoot, tableName);   
-
+    elementNode* tableInstElem = retrieveInstanceElement(ci->elementRoot, tableName);
+    
     if (tableInstance) {
         return RBUS_ERROR_SUCCESS;
     }

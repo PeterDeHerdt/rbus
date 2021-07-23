@@ -202,12 +202,15 @@ static void rbusSubscriptions_onSubscriptionCreated(rbusSubscription_t* sub, ele
 
         while(child)
         {
-            if(TokenChain_match(sub->tokens, child))
+            if(child->type != 0)
             {
-                rtList_PushBack(sub->instances, child, NULL);
-                addElementSubscription(child, sub, false);
+                if(TokenChain_match(sub->tokens, child))
+                {
+                    rtList_PushBack(sub->instances, child, NULL);
+                    addElementSubscription(child, sub, false);
+                }
             }
-
+            
             /*recurse into children except for row templates {i}*/
             if( child->child && !(child->parent->type == RBUS_ELEMENT_TYPE_TABLE && strcmp(child->name, "{i}") == 0) )
             {
