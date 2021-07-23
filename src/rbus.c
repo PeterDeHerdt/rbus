@@ -1381,13 +1381,13 @@ static void _get_callback_handler (rbusHandle_t handle, rbusMessage request, rbu
                             rbusValue_appendToMessage(rbusProperty_GetName(first), rbusProperty_GetValue(first), *response);
                             first = rbusProperty_GetNext(first);
                         }
-                        /* Release the memory */
-                        rbusProperty_Release(xproperties);
                     }
                     else
                     {
                         rbusMessage_SetInt32(*response, (int) RBUS_ERROR_ELEMENT_DOES_NOT_EXIST);
                     }
+                    /* Release the memory */
+                    rbusProperty_Release(xproperties);
                 }
                 else
                 {
@@ -1885,6 +1885,64 @@ rbusError_t rbus_close(rbusHandle_t handle)
     }
 
     return errorcode;
+}
+
+rbusError_t rbusTable_registerRow(
+    rbusHandle_t handle,
+    char const* tableName,
+    char const* rowName,
+    char const* aliasName,
+    uint32_t instNum)
+{
+    comp_info* ci = (comp_info*)handle;
+    
+    elementNode* tableInstance = retrieveInstanceElement(ci->elementRoot, rowName);
+    elementNode* tableRegElem = retrieveElement(ci->elementRoot, tableName);
+    elementNode* tableInstElem = retrieveInstanceElement(ci->elementRoot, tableName);
+
+    if (tableInstance) {
+        return RBUS_ERROR_SUCCESS;
+    }
+
+    if(tableRegElem && tableInstElem)
+    {
+        RBUSLOG_DEBUG("%s: register table row %s", __FUNCTION__, rowName);
+        registerTableRow(handle, tableInstElem, tableName, aliasName, instNum);
+        return RBUS_ERROR_SUCCESS;
+    }
+
+    return RBUS_ERROR_INVALID_INPUT;
+}
+
+rbusError_t rbusTable_unregisterRow(
+    rbusHandle_t handle,
+    char const* rowName)
+{
+    comp_info* ci = (comp_info*)handle;
+
+    /*get the element for the row */
+    elementNode* rowRegElem = retrieveElement(ci->elementRoot, rowName);
+    elementNode* rowInstElem = retrieveInstanceElement(ci->elementRoot, rowName);
+
+    if(rowRegElem && rowInstElem)
+    {
+        /*switch to the row's table */
+        elementNode* tableRegElem = rowRegElem->parent;
+        elementNode* tableInstElem = rowInstElem->parent;
+
+        if(tableRegElem && tableInstElem)
+        {
+            unregisterTableRow(handle, rowInstElem);
+            return RBUS_ERROR_SUCCESS;
+        }
+    }
+    else
+    {
+        // not found - so nothing to delete
+        return RBUS_ERROR_SUCCESS;
+    }
+
+    return RBUS_ERROR_INVALID_INPUT;
 }
 
 rbusError_t rbus_regDataElements(
