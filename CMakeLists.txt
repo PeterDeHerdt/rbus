@@ -49,14 +49,8 @@ else ()
   set (CMAKE_C_STANDARD 11)
 endif ()
 
-
-<<<<<<< HEAD
 set(CMAKE_C_FLAGS_DEBUG "-Wall -Wextra -Wno-type-limits -g -fno-inline")
 set(CMAKE_C_FLAGS_RELEASE "-Wall -Wextra")
-=======
-set(CMAKE_C_FLAGS_DEBUG "-Wall -Wextra -Wextra -Wno-type-limits -g -fno-inline")
-set(CMAKE_C_FLAGS_RELEASE "-Werror -Wall -Wextra")
->>>>>>> 10fb51e635d0e82205ecae16f164939cce5d062d
 
 if (ENABLE_CODE_COVERAGE)
     include (CodeCoverage)
