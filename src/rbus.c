@@ -1888,11 +1888,11 @@ rbusError_t rbusTable_registerRow(
     char const* aliasName,
     uint32_t instNum)
 {
-    comp_info* ci = (comp_info*)handle;
-    
-    elementNode* tableInstance = retrieveInstanceElement(ci->elementRoot, rowName);
-    elementNode* tableRegElem = retrieveElement(ci->elementRoot, tableName);
-    elementNode* tableInstElem = retrieveInstanceElement(ci->elementRoot, tableName);
+    struct _rbusHandle* handleInfo = (struct _rbusHandle*)handle;
+
+    elementNode* tableInstance = retrieveInstanceElement(handleInfo->elementRoot, rowName);
+    elementNode* tableRegElem = retrieveElement(handleInfo->elementRoot, tableName);
+    elementNode* tableInstElem = retrieveInstanceElement(handleInfo->elementRoot, tableName);
 
     if (tableInstance) {
         return RBUS_ERROR_SUCCESS;
@@ -1912,11 +1912,11 @@ rbusError_t rbusTable_unregisterRow(
     rbusHandle_t handle,
     char const* rowName)
 {
-    comp_info* ci = (comp_info*)handle;
+    struct _rbusHandle* handleInfo = (struct _rbusHandle*)handle;
 
     /*get the element for the row */
-    elementNode* rowRegElem = retrieveElement(ci->elementRoot, rowName);
-    elementNode* rowInstElem = retrieveInstanceElement(ci->elementRoot, rowName);
+    elementNode* rowRegElem = retrieveElement(handleInfo->elementRoot, rowName);
+    elementNode* rowInstElem = retrieveInstanceElement(handleInfo->elementRoot, rowName);
 
     if(rowRegElem && rowInstElem)
     {
