@@ -34,6 +34,7 @@
 
 #include "rbus_valuechange.h"
 #include "rbus_config.h"
+#include "rbus_handle.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <memory.h>
@@ -75,6 +76,9 @@ ValueChangeDetector_t* gVC = NULL;
 
 static void rbusValueChange_Init()
 {
+    pthread_mutexattr_t attrib;
+    pthread_condattr_t cattrib;
+
     RBUSLOG_DEBUG("%s", __FUNCTION__);
 
     if(gVC)
@@ -87,11 +91,14 @@ static void rbusValueChange_Init()
 
     rtVector_Create(&gVC->params);
 
-    pthread_mutexattr_t attrib;
     ERROR_CHECK(pthread_mutexattr_init(&attrib));
     ERROR_CHECK(pthread_mutexattr_settype(&attrib, PTHREAD_MUTEX_ERRORCHECK));
     ERROR_CHECK(pthread_mutex_init(&gVC->mutex, &attrib));
-    ERROR_CHECK(pthread_cond_init(&gVC->cond, NULL));
+
+    ERROR_CHECK(pthread_condattr_init(&cattrib));
+    ERROR_CHECK(pthread_condattr_setclock(&cattrib, CLOCK_MONOTONIC));
+    ERROR_CHECK(pthread_cond_init(&gVC->cond, &cattrib));
+    ERROR_CHECK(pthread_condattr_destroy(&cattrib));
 }
 
 static void vcParams_Free(void* p)
@@ -174,6 +181,7 @@ static void* rbusValueChange_pollingThreadFunc(void *userData)
             if(rbusValue_Compare(newVal, oldVal))
             {
                 rbusSubscription_t* subscription;
+                rbusValue_t byVal = NULL;
                 rtListItem li;
 
                 RBUSLOG_INFO("%s: value change detected for %s", __FUNCTION__, rbusProperty_GetName(rec->property));
@@ -197,6 +205,22 @@ static void* rbusValueChange_pollingThreadFunc(void *userData)
                     false, we don't have anything in the API to allow a provider to know about subscribers and to publish to 
                     specific providers.
                 */
+
+                /* The "by" field is set to the component's name which made the last value change.
+                   The source of a value-change could be an external component calling rbus_set or the provider internally updating
+                   the value.  changeComp/changeTime are updated through the rbus_set path, but not through the provider internal path.
+                   We must deduce if the provider has updated the value and reflect that change to the changeComp/changeTime, right here.
+                   If we don't have a changeComp or we do but the changeTime is older then the current polling period,
+                   then we know it was the provider who updated the value we are now detecting.
+                */
+                if(rec->node->changeComp == NULL || 
+                   rtTime_Elapsed(&rec->node->changeTime, NULL) >= rbusConfig_Get()->valueChangePeriod)
+                {
+                    setPropertyChangeComponent((elementNode*)rec->node, rec->handle->componentName);
+                }
+                rbusValue_Init(&byVal);
+                rbusValue_SetString(byVal, rec->node->changeComp);
+                
                 rtList_GetFront(rec->node->subscriptions, &li);
                 while(li)
                 {
@@ -241,6 +265,8 @@ static void* rbusValueChange_pollingThreadFunc(void *userData)
                         rbusObject_Init(&data, NULL);
                         rbusObject_SetValue(data, "value", newVal);
                         rbusObject_SetValue(data, "oldValue", oldVal);
+                        rbusObject_SetValue(data, "by", byVal);
+
                         if(filterResult)
                         {
                             rbusObject_SetValue(data, "filter", filterResult);
@@ -275,6 +301,9 @@ static void* rbusValueChange_pollingThreadFunc(void *userData)
                     }
                 }
             
+                if(byVal)
+                    rbusValue_Release(byVal);
+
                 /*update the record's property with new value*/
                 rbusProperty_SetValue(rec->property, rbusProperty_GetValue(property));
                 rbusProperty_Release(property);
@@ -347,14 +376,14 @@ void rbusValueChange_AddPropertyNode(rbusHandle_t handle, elementNode* propNode)
 
         if(result != RBUS_ERROR_SUCCESS)
         {
-            rtLog_Warn("%s: failed to get current value for %s as the node is not found", __FUNCTION__, propNode->fullName);
+            RBUSLOG_WARN("%s: failed to get current value for %s as the node is not found", __FUNCTION__, propNode->fullName);
             vcParams_Free(rec);
             rec = NULL;
             return;
         }
 
         char* sValue;
-        rtLog_Debug("%s: %s=%s", __FUNCTION__, propNode->fullName, (sValue = rbusValue_ToString(rbusProperty_GetValue(rec->property), NULL, 0)));
+        RBUSLOG_DEBUG("%s: %s=%s", __FUNCTION__, propNode->fullName, (sValue = rbusValue_ToString(rbusProperty_GetValue(rec->property), NULL, 0)));
         free(sValue);
 
         LOCK();//############ LOCK ############

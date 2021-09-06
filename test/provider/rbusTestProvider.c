@@ -38,7 +38,9 @@ char componentName[RBUS_MAX_NAME_LENGTH] = "TestProvider";
 
 /*value tests*/
 TestValueProperty* gTestValues;
-
+rbusValue_t gBigString = NULL;
+rbusValue_t gBigBytes = NULL;
+int32_t gByValue = 0;
 /*
  * Generic Data Model Tree Structure
  */
@@ -668,6 +670,53 @@ rbusError_t setValueHandler(rbusHandle_t handle, rbusProperty_t property, rbusSe
     return RBUS_ERROR_SUCCESS;
 }
 
+rbusError_t getBigHandler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t* opts)
+{
+    char const* name = rbusProperty_GetName(property);
+    (void)handle;
+    (void)opts;
+
+    printf("%s called for property %s\n", __FUNCTION__, name);
+
+    if(strstr(name, "String") == 0)
+    {
+        rbusProperty_SetValue(property, gBigString);
+    }
+    else if(strstr(name, "Bytes") == 0)
+    {
+        rbusProperty_SetValue(property, gBigBytes);
+    }
+    else
+    {
+        return RBUS_ERROR_ELEMENT_DOES_NOT_EXIST;
+    }
+
+    return RBUS_ERROR_SUCCESS;
+}
+
+rbusError_t setBigHandler(rbusHandle_t handle, rbusProperty_t property, rbusSetHandlerOptions_t* options)
+{
+    char const* name = rbusProperty_GetName(property);
+    (void)handle;
+    (void)options;
+
+    printf("%s called for property %s\n", __FUNCTION__, name);
+
+    if(strstr(name, "String") == 0)
+    {
+        rbusValue_Copy(gBigString, rbusProperty_GetValue(property));
+    }
+    else if(strstr(name, "Bytes") == 0)
+    {
+        rbusValue_Copy(gBigBytes, rbusProperty_GetValue(property));
+    }
+    else
+    {
+        return RBUS_ERROR_ELEMENT_DOES_NOT_EXIST;
+    }
+    return RBUS_ERROR_SUCCESS;
+}
+
 rbusError_t getVCHandler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t* opts)
 {
     static uint32_t count = 0;
@@ -762,6 +811,29 @@ rbusError_t getVCStrHandler(rbusHandle_t handle, rbusProperty_t property, rbusGe
 
     return RBUS_ERROR_SUCCESS;
 }
+
+rbusError_t getVCByHandler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t* opts)
+{
+    (void)handle;
+    (void)opts;
+    rbusValue_t value;
+    rbusValue_Init(&value);
+    rbusValue_SetInt32(value, gByValue);
+    rbusProperty_SetValue(property, value);
+    rbusValue_Release(value);
+    printf("getVCByHandler [%s]=[%d]\n", rbusProperty_GetName(property), gByValue);
+    return RBUS_ERROR_SUCCESS;
+}
+
+rbusError_t setVCByHandler(rbusHandle_t handle, rbusProperty_t property, rbusSetHandlerOptions_t* opts)
+{
+    (void)handle;
+    (void)opts;
+    gByValue = rbusValue_GetInt32(rbusProperty_GetValue(property));
+    printf("setVCByHandler [%s]=[%d]\n", rbusProperty_GetName(property), gByValue);
+    return RBUS_ERROR_SUCCESS;
+}
+
 
 typedef struct MethodData
 {
@@ -1208,7 +1280,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    #define numDataElems 46
+    #define numDataElems 49
 
     rbusDataElement_t dataElement[numDataElems] = {
         {"Device.%s.Event1!", RBUS_ELEMENT_TYPE_EVENT, {NULL,NULL,NULL,NULL, eventSubHandler, NULL}},
@@ -1228,6 +1300,7 @@ int main(int argc, char *argv[])
         {"Device.%s.VCParamStr3", RBUS_ELEMENT_TYPE_PROPERTY, {getVCStrHandler,NULL,NULL,NULL,NULL, NULL}},
         {"Device.%s.VCParamStr4", RBUS_ELEMENT_TYPE_PROPERTY, {getVCStrHandler,NULL,NULL,NULL,NULL, NULL}},
         {"Device.%s.VCParamStr5", RBUS_ELEMENT_TYPE_PROPERTY, {getVCStrHandler,NULL,NULL,NULL,NULL, NULL}},
+        {"Device.%s.VCParamBy",   RBUS_ELEMENT_TYPE_PROPERTY, {getVCByHandler,setVCByHandler,NULL,NULL,NULL, NULL}},
         {"Device.%s.Table1.{i}.", RBUS_ELEMENT_TYPE_TABLE, {NULL, NULL, tableAddRowHandler, tableRemoveRowHandler, eventSubHandler, NULL}},
         {"Device.%s.Table1.{i}.Table2.{i}.", RBUS_ELEMENT_TYPE_TABLE, {NULL, NULL, tableAddRowHandler, tableRemoveRowHandler, eventSubHandler, NULL}},
         {"Device.%s.Table1.{i}.Table2.{i}.Table3.{i}.", RBUS_ELEMENT_TYPE_TABLE, {NULL, NULL, tableAddRowHandler, tableRemoveRowHandler, eventSubHandler, NULL}},
@@ -1259,7 +1332,9 @@ int main(int argc, char *argv[])
         {"Device.%s.PartialPath2.{i}.SubTable.{i}.Param5", RBUS_ELEMENT_TYPE_PROPERTY, {ppParamGetHandler, NULL, NULL, NULL, NULL, NULL}},
         {"Device.%s.PartialPath2.{i}.SubTable.{i}.SubObject2.Param6", RBUS_ELEMENT_TYPE_PROPERTY, {ppParamGetHandler, NULL, NULL, NULL, NULL, NULL}},
         {"Device.%s.PartialPath2.{i}.SubTable.{i}.SubObject2.Param7", RBUS_ELEMENT_TYPE_PROPERTY, {ppParamGetHandler, NULL, NULL, NULL, NULL, NULL}},
-        {"Device.%s.TestProviderNotFound", RBUS_ELEMENT_TYPE_PROPERTY, {NULL,setProviderNotFound,NULL,NULL,NULL, NULL}}
+        {"Device.%s.TestProviderNotFound", RBUS_ELEMENT_TYPE_PROPERTY, {NULL,setProviderNotFound,NULL,NULL,NULL, NULL}},
+        {"Device.%s.BigString", RBUS_ELEMENT_TYPE_PROPERTY, {getBigHandler,setBigHandler,NULL,NULL,NULL, NULL}},
+        {"Device.%s.BigBytes", RBUS_ELEMENT_TYPE_PROPERTY, {getBigHandler,setBigHandler,NULL,NULL,NULL, NULL}}
     };
 
     for(i=0; i<numDataElems; ++i)
@@ -1270,6 +1345,19 @@ int main(int argc, char *argv[])
     TestValueProperties_Init(&gTestValues);
 
     initNodeTree();
+
+    rbusValue_Init(&gBigString);
+    rbusValue_Init(&gBigBytes);
+    {
+        const int BIGSIZE = 1000;
+        char* val = malloc(BIGSIZE);
+        int i = 0;
+        for(i = 0; i < BIGSIZE-1; ++i)
+            val[i] = (char)(32 + (i % 96));
+        val[BIGSIZE]=0;
+        rbusValue_SetString(gBigString, val);
+        rbusValue_SetBytes(gBigBytes, (uint8_t*)val, BIGSIZE);
+    }
 
     rc = rbus_open(&handle, componentName);
     printf("provider: rbus_open=%d\n", rc);
@@ -1430,6 +1518,11 @@ exit2:
     {
         free(dataElement[i].name);
     }
+
+    if(gBigString)
+        rbusValue_Release(gBigString);
+    if(gBigBytes)
+        rbusValue_Release(gBigBytes);
 
     printf("provider: exit\n");
     return rc;
