@@ -95,6 +95,9 @@ typedef enum _rbus_legacy_returns {
     RBUS_LEGACY_ERR_NOT_SUPPORT = 193,
     RBUS_LEGACY_ERR_RESOURCE_EXCEEDED = 9004,
     RBUS_LEGACY_ERR_INVALID_PARAMETER_NAME = 9005,
+    RBUS_LEGACY_ERR_INVALID_PARAMETER_TYPE = 9006,
+    RBUS_LEGACY_ERR_INVALID_PARAMETER_VALUE = 9007,
+    RBUS_LEGACY_ERR_NOT_WRITABLE = 9008,
 } rbusLegacyReturn_t;
 
 //********************************************************************************//
@@ -189,6 +192,15 @@ static rbusError_t CCSPError_to_rbusError(rtError e)
     case RBUS_LEGACY_ERR_INVALID_PARAMETER_NAME:
       err = RBUS_ERROR_INVALID_INPUT;
       break;
+    case RBUS_LEGACY_ERR_INVALID_PARAMETER_TYPE:
+      err = RBUS_ERROR_INVALID_INPUT;
+      break;
+    case RBUS_LEGACY_ERR_INVALID_PARAMETER_VALUE:
+     err = RBUS_ERROR_INVALID_INPUT;
+     break;
+    case RBUS_LEGACY_ERR_NOT_WRITABLE:
+     err = RBUS_ERROR_INVALID_OPERATION;
+     break;
     default:
       err = RBUS_ERROR_BUS_ERROR;
       break;
@@ -403,7 +415,8 @@ void rbusValue_initFromMessage(rbusValue_t* value, rbusMessage msg)
                     break;
                 default:
                     rbusMessage_GetBytes(msg, &data, &length);
-                    rbusValue_SetTLV(*value, type, length, data);
+                    if(length)
+                        rbusValue_SetTLV(*value, type, length, data);
                     break;
             }
 
@@ -576,9 +589,12 @@ void rbusObject_initFromMessage(rbusObject_t* obj, rbusMessage msg)
 
 void rbusValue_appendToMessage(char const* name, rbusValue_t value, rbusMessage msg)
 {
-    rbusValueType_t type = rbusValue_GetType(value);
+    rbusValueType_t type = RBUS_NONE;
 
     rbusMessage_SetString(msg, name);
+
+    if(value)
+        type = rbusValue_GetType(value);
     rbusMessage_SetInt32(msg, type);
 #if DEBUG_SERIALIZER
     RBUSLOG_INFO("> value add name=%s type=%d", name, type);
@@ -643,8 +659,17 @@ void rbusValue_appendToMessage(char const* name, rbusValue_t value, rbusMessage 
                 rbusMessage_SetBytes(msg, rbusValue_GetV(value), rbusValue_GetL(value));
                 break;
             default:
-                rbusMessage_SetBytes(msg, rbusValue_GetV(value), rbusValue_GetL(value));
+            {
+                uint8_t const* buff = NULL;
+                uint32_t len = 0;
+                if(value)
+                {
+                    buff = rbusValue_GetV(value);
+                    len = rbusValue_GetL(value);
+                }
+                rbusMessage_SetBytes(msg, buff, len);
                 break;
+            }
         }
 #if DEBUG_SERIALIZER
         char* sv = rbusValue_ToString(value,0,0);
@@ -2445,61 +2470,63 @@ rbusError_t rbus_set(rbusHandle_t handle, char const* name,rbusValue_t value, rb
     rbus_error_t err = RTMESSAGE_BUS_SUCCESS;
     rbusMessage setRequest, setResponse;
     struct _rbusHandle* handleInfo = (struct _rbusHandle*) handle;
+    rbusValueType_t type = rbusValue_GetType(value);
 
-    if (value != NULL)
+    if ((NULL == value) || (RBUS_NONE == type))
     {
-        rbusMessage_Init(&setRequest);
-        /* Set the Session ID first */
-        if ((opts) && (opts->sessionId != 0))
-            rbusMessage_SetInt32(setRequest, opts->sessionId);
-        else
-            rbusMessage_SetInt32(setRequest, 0);
+        return errorcode;
+    }
+    rbusMessage_Init(&setRequest);
+    /* Set the Session ID first */
+    if ((opts) && (opts->sessionId != 0))
+        rbusMessage_SetInt32(setRequest, opts->sessionId);
+    else
+        rbusMessage_SetInt32(setRequest, 0);
 
-        /* Set the Component name that invokes the set */
-        rbusMessage_SetString(setRequest, handleInfo->componentName);
-        /* Set the Size of params */
-        rbusMessage_SetInt32(setRequest, 1);
+    /* Set the Component name that invokes the set */
+    rbusMessage_SetString(setRequest, handleInfo->componentName);
+    /* Set the Size of params */
+    rbusMessage_SetInt32(setRequest, 1);
 
-        /* Set the params in details */
-        rbusValue_appendToMessage(name, value, setRequest);
+    /* Set the params in details */
+    rbusValue_appendToMessage(name, value, setRequest);
 
-        /* Set the Commit value; FIXME: Should we use string? */
-        rbusMessage_SetString(setRequest, (!opts || opts->commit) ? "TRUE" : "FALSE");
+    /* Set the Commit value; FIXME: Should we use string? */
+    rbusMessage_SetString(setRequest, (!opts || opts->commit) ? "TRUE" : "FALSE");
 
-        if((err = rbus_invokeRemoteMethod(name, METHOD_SETPARAMETERVALUES, setRequest, 6000, &setResponse)) != RTMESSAGE_BUS_SUCCESS)
+    if((err = rbus_invokeRemoteMethod(name, METHOD_SETPARAMETERVALUES, setRequest, 6000, &setResponse)) != RTMESSAGE_BUS_SUCCESS)
+    {
+        RBUSLOG_ERROR("%s rbus_invokeRemoteMethod failed with err %d", __FUNCTION__, err);
+        errorcode = rbuscoreError_to_rbusError(err);
+    }
+    else
+    {
+        rbusLegacyReturn_t legacyRetCode = RBUS_LEGACY_ERR_FAILURE;
+        int ret = -1;
+        char const* pErrorReason = NULL;
+        rbusMessage_GetInt32(setResponse, &ret);
+
+        RBUSLOG_DEBUG("Response from the remote method is [%d]!", ret);
+        errorcode = (rbusError_t) ret;
+        legacyRetCode = (rbusLegacyReturn_t) ret;
+
+        if((errorcode == RBUS_ERROR_SUCCESS) || (legacyRetCode == RBUS_LEGACY_ERR_SUCCESS))
         {
-            RBUSLOG_ERROR("%s rbus_invokeRemoteMethod failed with err %d", __FUNCTION__, err);
-            errorcode = rbuscoreError_to_rbusError(err);
+            errorcode = RBUS_ERROR_SUCCESS;
+            RBUSLOG_DEBUG("Successfully Set the Value");
         }
         else
         {
-            rbusLegacyReturn_t legacyRetCode = RBUS_LEGACY_ERR_FAILURE;
-            int ret = -1;
-            char const* pErrorReason = NULL;
-            rbusMessage_GetInt32(setResponse, &ret);
-
-            RBUSLOG_DEBUG("Response from the remote method is [%d]!", ret);
-            errorcode = (rbusError_t) ret;
-            legacyRetCode = (rbusLegacyReturn_t) ret;
-
-            if((errorcode == RBUS_ERROR_SUCCESS) || (legacyRetCode == RBUS_LEGACY_ERR_SUCCESS))
+            rbusMessage_GetString(setResponse, &pErrorReason);
+            RBUSLOG_WARN("Failed to Set the Value for %s", pErrorReason);
+            if(legacyRetCode > RBUS_LEGACY_ERR_SUCCESS)
             {
-                errorcode = RBUS_ERROR_SUCCESS;
-                RBUSLOG_DEBUG("Successfully Set the Value");
+                errorcode = CCSPError_to_rbusError(legacyRetCode);
             }
-            else
-            {
-                rbusMessage_GetString(setResponse, &pErrorReason);
-                RBUSLOG_WARN("Failed to Set the Value for %s", pErrorReason);
-                if(legacyRetCode > RBUS_LEGACY_ERR_SUCCESS)
-                {
-                    errorcode = CCSPError_to_rbusError(legacyRetCode);
-                }
-            }
-
-            /* Release the reponse message */
-            rbusMessage_Release(setResponse);
         }
+
+        /* Release the reponse message */
+        rbusMessage_Release(setResponse);
     }
     return errorcode;
 }
@@ -2510,6 +2537,7 @@ rbusError_t rbus_setMulti(rbusHandle_t handle, int numProps, rbusProperty_t prop
     rbus_error_t err = RTMESSAGE_BUS_SUCCESS;
     rbusMessage setRequest, setResponse;
     struct _rbusHandle* handleInfo = (struct _rbusHandle*) handle;
+    rbusValueType_t type = RBUS_NONE;
     rbusProperty_t current;
 
     if (numProps > 0 && properties != NULL)
@@ -2530,6 +2558,12 @@ rbusError_t rbus_setMulti(rbusHandle_t handle, int numProps, rbusProperty_t prop
         current = properties;
         while(current)
         {
+            type = rbusValue_GetType(rbusProperty_GetValue(current));
+            if (RBUS_NONE == type)
+            {
+                printf("Invalid data type passed in one of the data type\n");
+                return errorcode;
+            }
             rbusValue_appendToMessage(rbusProperty_GetName(current), rbusProperty_GetValue(current), setRequest);
             current = rbusProperty_GetNext(current);
         }
@@ -3448,7 +3482,8 @@ rbusError_t rbusMethod_InvokeInternal(
     rbusMessage_SetInt32(request, 0);/*TODO: this should be the session ID*/
     rbusMessage_SetString(request, methodName); /*TODO: do we need to append the name as well as pass the name as the 1st arg to rbus_invokeRemoteMethod ?*/
 
-    rbusObject_appendToMessage(inParams, request);
+    if(inParams)
+        rbusObject_appendToMessage(inParams, request);
 
     if((err = rbus_invokeRemoteMethod(
         methodName,
